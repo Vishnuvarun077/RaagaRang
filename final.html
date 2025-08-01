@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RaagaRangam - Interactive Carnatic Music</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&family=Noto+Sans+Telugu:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
+        }
+        .telugu-font { font-family: 'Noto Sans Telugu', sans-serif; }
+        .hindi-font { font-family: 'Noto Sans Devanagari', sans-serif; }
+        .loader { border: 5px solid rgba(255, 215, 0, 0.2); border-top: 5px solid #ffd700; border-radius: 50%; width: 60px; height: 60px; animation: spin 1.5s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .indian-pattern { background: linear-gradient(45deg, transparent 25%, rgba(255, 215, 0, 0.05) 25%, rgba(255, 215, 0, 0.05) 50%, transparent 50%, transparent 75%, rgba(255, 215, 0, 0.05) 75%); background-size: 20px 20px; }
+        
+        .swara-glow { box-shadow: 0 0 25px rgba(255, 215, 0, 0.4); transform: scale(1.1); }
+        .swara-note { transition: all 0.1s ease-in-out; }
+        .swara-note.absent { opacity: 0.3; text-decoration: line-through; pointer-events: none; cursor: default; }
+
+        .tala-beat { animation: pulse 0.3s ease-in-out; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); } }
+        .raga-card { background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 140, 0, 0.1) 100%); border: 1px solid rgba(255, 215, 0, 0.3); transition: all 0.3s ease; }
+        .raga-card:hover { background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 140, 0, 0.2) 100%); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255, 215, 0, 0.2); }
+        .particle-canvas { pointer-events: none; position: absolute; top: 0; left: 0; z-index: 10; }
+        .language-btn { transition: all 0.3s ease; }
+        .language-btn.active { background: linear-gradient(135deg, #ffd700, #ff8c00); color: #000; font-weight: 600; }
+        
+        /* Octave buttons specific styles */
+        .octave-btn {
+            background-color: #3f51b5; /* A shade of blue */
+            border: 1px solid #7986cb;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .octave-btn:hover {
+            background-color: #5c6bc0;
+            transform: translateY(-1px);
+        }
+        .octave-btn.active {
+            background: linear-gradient(135deg, #ffd700, #ff8c00);
+            color: #000;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+        }
+        
+        @media (max-width: 768px) { .control-grid, .instruction-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 640px) { .main-title { font-size: 3rem; } .control-panel { padding: 1rem; } }
+    </style>
+</head>
+<body class="min-h-screen text-white">
+
+    <div class="container mx-auto p-2 sm:p-4">
+        <!-- Language Switcher and Header -->
+        <div class="fixed top-4 right-4 z-50 flex space-x-2">
+            <button class="language-btn px-3 py-2 rounded-lg bg-black bg-opacity-50 text-sm hover:bg-opacity-70 active" data-lang="en">EN</button>
+            <button class="language-btn px-3 py-2 rounded-lg bg-black bg-opacity-50 text-sm hover:bg-opacity-70" data-lang="te">తె</button>
+            <button class="language-btn px-3 py-2 rounded-lg bg-black bg-opacity-50 text-sm hover:bg-opacity-70" data-lang="hi">हि</button>
+        </div>
+        <header class="text-center mb-4 sm:mb-6">
+            <h1 class="main-title text-4xl sm:text-6xl font-light text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 tracking-wider">
+                <span id="app-title">RaagaRangam</span>
+            </h1>
+            <p id="app-subtitle" class="text-amber-200 mt-2 font-light text-base sm:text-lg">Interactive Carnatic Music Experience</p>
+        </header>
+
+        <!-- Control Panel -->
+        <div class="control-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div class="raga-card control-panel p-3 sm:p-4 rounded-xl"><h3 class="text-amber-300 font-semibold mb-3 flex items-center text-sm sm:text-base"><span class="mr-2">🎵</span> <span id="raga-title">Raga</span></h3><select id="ragaSelect" class="w-full bg-gray-800 border border-amber-500 rounded-lg p-2 text-white text-sm"><option value="mayamalavagowla">Mayamalavagowla</option><option value="shankarabharanam">Shankarabharanam</option><option value="kalyani">Kalyani</option><option value="kharaharapriya">Kharaharapriya</option><option value="mohanam">Mohanam</option><option value="hindolam">Hindolam</option></select><div id="ragaInfo" class="mt-2 text-xs text-amber-200"></div></div>
+            <div class="raga-card control-panel p-3 sm:p-4 rounded-xl"><h3 class="text-amber-300 font-semibold mb-3 flex items-center text-sm sm:text-base"><span class="mr-2">🥁</span> <span id="tala-title">Tala</span></h3><select id="talaSelect" class="w-full bg-gray-800 border border-amber-500 rounded-lg p-2 text-white text-sm"><option value="adi">Adi Tala (8 beats)</option><option value="rupaka">Rupaka Tala (6 beats)</option><option value="triputa">Triputa Tala (7 beats)</option><option value="dhruva">Dhruva Tala (14 beats)</option></select><div id="talaDisplay" class="mt-2 flex justify-center space-x-1"></div></div>
+            <div class="raga-card control-panel p-3 sm:p-4 rounded-xl">
+                <h3 class="text-amber-300 font-semibold mb-3 flex items-center text-sm sm:text-base"><span class="mr-2">🎼</span> <span id="tanpura-title">Tanpura</span></h3>
+                <button id="tanpuraToggle" class="w-full bg-amber-600 hover:bg-amber-500 rounded-lg p-2 transition-colors text-sm"><span id="tanpura-btn-text">Start Drone</span></button>
+                <input type="range" id="tanpuraVolume" min="-60" max="0" value="-20" class="w-full mt-2" />
+                <div id="volume-label" class="text-xs text-amber-200 mt-1">Drone Volume</div>
+            </div>
+            <div class="raga-card control-panel p-3 sm:p-4 rounded-xl">
+                <h3 class="text-amber-300 font-semibold mb-3 flex items-center text-sm sm:text-base"><span class="mr-2">⬆️</span> <span id="octave-title">Octave</span></h3>
+                <div class="flex justify-around space-x-2">
+                    <button id="octaveBtnMandra" class="octave-btn" data-octave="3"><span id="mandra-text">Mandra</span></button>
+                    <button id="octaveBtnMadhya" class="octave-btn active" data-octave="4"><span id="madhya-text">Madhya</span></button>
+                    <button id="octaveBtnTara" class="octave-btn" data-octave="5"><span id="tara-text">Tara</span></button>
+                </div>
+            </div>
+        </div>
+
+        <main>
+            <div id="app-container" class="relative w-full max-w-6xl mx-auto bg-black rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden border-2 border-amber-500 indian-pattern">
+                <video id="webcam" class="hidden" autoplay playsinline></video>
+                <canvas id="output_canvas" class="w-full h-auto aspect-video transform scale-x-[-1]"></canvas>
+                <canvas id="particle_canvas" class="particle-canvas w-full h-auto aspect-video transform scale-x-[-1]"></canvas>
+                
+                <!-- Removed octave-zone overlays -->
+
+                <!-- UI Overlays -->
+                <div id="ui-container" class="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-60 backdrop-blur-md transition-opacity duration-700">
+                    <div id="permission-prompt" class="text-center p-4 sm:p-8"><div class="mb-6"><span class="text-4xl sm:text-6xl">🎵</span></div><h2 id="welcome-title" class="text-2xl sm:text-3xl font-light mb-4 text-amber-300">Welcome to RaagaRangam</h2><p id="welcome-description" class="text-amber-200 mb-6 max-w-md text-sm sm:text-base">Experience the beauty of Carnatic music through gesture-based interaction. Allow camera access to begin your musical journey.</p><button id="webcamButton" class="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-semibold py-3 sm:py-4 px-6 sm:px-8 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg shadow-amber-500/20 text-sm sm:text-base"><span id="begin-btn-text">Begin Experience</span></button></div>
+                    <div id="loading-indicator" class="hidden text-center"><div class="loader mx-auto"></div><p id="loading-text" class="mt-6 text-base sm:text-lg font-light tracking-wider text-amber-300">Preparing the musical sphere...</p></div>
+                </div>
+                <div id="performance-info" class="absolute top-2 sm:top-4 left-2 sm:left-4 bg-black bg-opacity-50 rounded-lg p-2 sm:p-3 text-xs sm:text-sm"><div class="text-amber-300 font-semibold"><span id="current-swara-label">Current Swara</span>: <span id="currentSwara">--</span></div><div class="text-amber-200"><span id="octave-label">Octave</span>: <span id="currentOctave">4</span></div><div class="text-amber-200"><span id="raga-label">Raga</span>: <span id="currentRagaDisplay">Mayamalavagowla</span></div></div>
+                <div id="swara-display" class="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 right-2 sm:right-4 flex justify-center space-x-1 sm:space-x-2">
+                    <!-- Swara display elements -->
+                    <div class="swara-note bg-black bg-opacity-50 rounded-lg p-1 sm:p-2 text-center min-w-8 sm:min-w-12 text-xs sm:text-sm" data-swara="Sa">Sa</div>
+                    <div class="swara-note bg-black bg-opacity-50 rounded-lg p-1 sm:p-2 text-center min-w-8 sm:min-w-12 text-xs sm:text-sm" data-swara="Ri">Ri</div>
+                    <div class="swara-note bg-black bg-opacity-50 rounded-lg p-1 sm:p-2 text-center min-w-8 sm:min-w-12 text-xs sm:text-sm" data-swara="Ga">Ga</div>
+                    <div class="swara-note bg-black bg-opacity-50 rounded-lg p-1 sm:p-2 text-center min-w-8 sm:min-w-12 text-xs sm:text-sm" data-swara="Ma">Ma</div>
+                    <div class="swara-note bg-black bg-opacity-50 rounded-lg p-1 sm:p-2 text-center min-w-8 sm:min-w-12 text-xs sm:text-sm" data-swara="Pa">Pa</div>
+                    <div class="swara-note bg-black bg-opacity-50 rounded-lg p-1 sm:p-2 text-center min-w-8 sm:min-w-12 text-xs sm:text-sm" data-swara="Da">Da</div>
+                    <div class="swara-note bg-black bg-opacity-50 rounded-lg p-1 sm:p-2 text-center min-w-8 sm:min-w-12 text-xs sm:text-sm" data-swara="Ni">Ni</div>
+                </div>
+            </div>
+            <p id="error-message" class="text-red-400 mt-4 h-6 text-center text-sm"></p>
+        </main>
+        
+        <!-- Instructions Panel -->
+        <div class="mt-4 sm:mt-6 raga-card p-4 sm:p-6 rounded-xl">
+            <h3 id="instructions-title" class="text-amber-300 font-semibold mb-4 text-lg sm:text-xl">🙏 How to Play</h3>
+            <div class="instruction-grid grid grid-cols-1 md:grid-cols-2 gap-4 text-xs sm:text-sm">
+                <div>
+                    <h4 id="left-hand-title" class="text-amber-200 font-semibold mb-2">Left Hand (Swaras):</h4>
+                    <ul class="space-y-1 text-gray-300">
+                        <li id="instruction-1">• Index finger to thumb: Sa</li>
+                        <li id="instruction-2">• Middle finger to thumb: Ri</li>
+                        <li id="instruction-3">• Ring finger to thumb: Ga</li>
+                        <li id="instruction-4_new">• Pinky finger to thumb: Not used for notes.</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 id="right-hand-title" class="text-amber-200 font-semibold mb-2">Right Hand (Swaras):</h4>
+                    <ul class="space-y-1 text-gray-300">
+                        <li id="instruction-5_new">• Index finger to thumb: Ma</li>
+                        <li id="instruction-6_new">• Middle finger to thumb: Pa</li>
+                        <li id="instruction-7_new">• Ring finger to thumb: Da</li>
+                        <li id="instruction-8_new">• Pinky finger to thumb: Ni</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { HandLandmarker, FilesetResolver, DrawingUtils } from "https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.14";
+
+        // Language objects (full content for each language in JS)
+        const languages = {en:{appTitle:"RaagaRangam",appSubtitle:"Interactive Carnatic Music Experience",ragaTitle:"Raga",talaTitle:"Tala",tanpuraTitle:"Tanpura",octaveTitle:"Octave",tanpuraBtnStart:"Start Drone",tanpuraBtnStop:"Stop Drone",volumeLabel:"Drone Volume",mandra_text:"Mandra",madhya_text:"Madhya",tara_text:"Tara",welcomeTitle:"Welcome to RaagaRangam",welcomeDescription:"Experience the beauty of Carnatic music through gesture-based interaction. Allow camera access to begin your musical journey.",beginBtnText:"Begin Experience",loadingText:"Preparing the musical sphere...",currentSwaraLabel:"Current Swara",octaveLabel:"Octave",ragaLabel:"Raga",instructionsTitle:"🙏 How to Play",leftHandTitle:"Left Hand (Swaras):",instruction1:"• Index finger to thumb: Sa",instruction2:"• Middle finger to thumb: Ri",instruction3:"• Ring finger to thumb: Ga",instruction4_new:"• Pinky finger to thumb: Not used for notes.",rightHandTitle:"Right Hand (Swaras):",instruction5_new:"• Index finger to thumb: Ma",instruction6_new:"• Middle finger to thumb: Pa",instruction7_new:"• Ring finger to thumb: Da",instruction8_new:"• Pinky finger to thumb: Ni",},te:{appTitle:"రాగరంగం",appSubtitle:"సంవేదనాత్మక కర్ణాటక సంగీత అనుభవం",ragaTitle:"రాగం",talaTitle:"తాళం",tanpuraTitle:"తాన్పుర",octaveTitle:"సప్తకం",tanpuraBtnStart:"శ్రుతి ప్రారంభించు",tanpuraBtnStop:"శ్రుతి ఆపు",volumeLabel:"శ్రుతి వాల్యూమ్",mandra_text:"మంద్ర",madhya_text:"మధ్య",tara_text:"తార",welcomeTitle:"రాగరంగానికి స్వాగతం",welcomeDescription:"సంజ్ఞా ఆధారిత పరస్పర చర్య ద్వారా కర్ణాటక సంగీత సౌందర్యాన్ని అనుభవించండి. మీ సంగీత యాత్రను ప్రారంభించడానికి కెమెరా అనుమతిని ఇవ్వండి.",beginBtnText:"అనుభవం ప్రారంభించు",loadingText:"సంగీత గోళాన్ని సిద్ధం చేస్తున్నాం...",currentSwaraLabel:"ప్రస్తుత స్వరం",octaveLabel:"సప్తకం",ragaLabel:"రాగం",instructionsTitle:"🙏 ఎలా వాయించాలి",leftHandTitle:"ఎడమ చేతి (స్వరాలు):",instruction1:"• చూపుడు వేలు - బొటనవేలు: సా",instruction2:"• మధ్య వేలు - బొటనవేలు: రి",instruction3:"• ఉంగరపు వేలు - బొటనవేలు: గ",instruction4_new:"• చిటికెన వేలు - బొటనవేలు: స్వరాలకు ఉపయోగపడదు.",rightHandTitle:"కుడి చేతి (స్వరాలు):",instruction5_new:"• చూపుడు వేలు - బొటనవేలు: మ",instruction6_new:"• మధ్య వేలు - బొటనవేలు: ప",instruction7_new:"• ఉంగరపు వేలు - బొటనవేలు: ద",instruction8_new:"• చిటికెన వేలు - బొటనవేలు: ని",},hi:{appTitle:"रागरंगम",appSubtitle:"संवादात्मक कर्नाटक संगीत अनुभव",ragaTitle:"राग",talaTitle:"ताल",tanpuraTitle:"तानपुरा",octaveTitle:"सप्तक",tanpuraBtnStart:"ड्रोन शुरू करें",tanpuraBtnStop:"ड्रोन बंद करें",volumeLabel:"ड्रोन वॉल्यूम",mandra_text:"मंद्र",madhya_text:"मध्य",tara_text:"तार",welcomeTitle:"रागरंगम में स्वागत",welcomeDescription:"इशारा-आधारित इंटरैक्शन के माध्यम से कर्नाटक संगीत की सुंदरता का अनुभव करें। अपनी संगीत यात्रा शुरू करने के लिए कैमरा एक्सेस की अनुमति दें।",beginBtnText:"अनुभव शुरू करें",loadingText:"संगीत गोला तैयार कर रहे हैं...",currentSwaraLabel:"वर्तमान स्वर",octaveLabel:"सप्तक",ragaLabel:"राग",instructionsTitle:"🙏 कैसे बजाएं",leftHandTitle:"बायां हाथ (स्वर):",instruction1:"• तर्जनी से अंगूठे तक: सा",instruction2:"• मध्यमा से अंगूठे तक: रि",instruction3:"• अनामिका से अंगूठे तक: ग",instruction4_new:"• कनिष्ठा से अंगूठे तक: स्वरों के लिए उपयोग नहीं होता।",rightHandTitle:"दाहिना हाथ (स्वर):",instruction5_new:"• तर्जनी से अंगूठे तक: म",instruction6_new:"• मध्यमा से अंगूठे तक: प",instruction7_new:"• अनामिका से अंगूठे तक: ध",instruction8_new:"• कनिष्ठा से अंगूठे तक: नि",}};
+        let currentLanguage = 'en';
+
+        // DOM Element References
+        const video = document.getElementById("webcam"), canvasElement = document.getElementById("output_canvas"), particleCanvas = document.getElementById("particle_canvas"), canvasCtx = canvasElement.getContext("2d"), particleCtx = particleCanvas.getContext("2d"), webcamButton = document.getElementById("webcamButton"), uiContainer = document.getElementById("ui-container"), permissionPrompt = document.getElementById("permission-prompt"), loadingIndicator = document.getElementById("loading-indicator"), ragaSelect = document.getElementById("ragaSelect"), talaSelect = document.getElementById("talaSelect"), tanpuraToggle = document.getElementById("tanpuraToggle"), tanpuraVolume = document.getElementById("tanpuraVolume"), currentSwara = document.getElementById("currentSwara"), currentOctave = document.getElementById("currentOctave"), currentRagaDisplay = document.getElementById("currentRagaDisplay"), languageButtons = document.querySelectorAll('.language-btn');
+        const ragaInfo = document.getElementById('ragaInfo');
+        const talaDisplay = document.getElementById('talaDisplay');
+        const octaveBtnMandra = document.getElementById('octaveBtnMandra'), octaveBtnMadhya = document.getElementById('octaveBtnMadhya'), octaveBtnTara = document.getElementById('octaveBtnTara');
+
+
+        // Language Update Function
+        const updateLanguage = (lang) => {
+            currentLanguage = lang;
+            const texts = languages[lang];
+            // Update elements based on their IDs
+            document.querySelectorAll('[id]').forEach(el => {
+                // Handle complex IDs like instruction4_new that use underscores in JS
+                // but hyphens in HTML IDs.
+                let keyNameInLanguageObject = el.id;
+                if (keyNameInLanguageObject.includes('-')) {
+                    keyNameInLanguageObject = keyNameInLanguageObject.replace(/-/g, '_');
+                }
+
+                if (texts[keyNameInLanguageObject] !== undefined) { // Check if key exists in texts
+                    el.textContent = texts[keyNameInLanguageObject];
+                }
+            });
+
+            // Update active language button style
+            languageButtons.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.lang === lang);
+            });
+            // Apply language-specific font classes
+            document.body.className = document.body.className.replace(/telugu-font|hindi-font/g, '');
+            if(lang === 'te') document.body.classList.add('telugu-font');
+            if(lang === 'hi') document.body.classList.add('hindi-font');
+
+            // Re-render Raga Info and Tala Display for language consistency
+            updateRagaInfo();
+            updateTalaDisplay(talaCounter % appState.currentTala.beats, appState.currentTala.pattern[talaCounter % appState.currentTala.beats]); // Re-draw tala dots
+            updateOctaveButtonsUI(); // Update octave button text
+        };
+
+        // App State Variables
+        let handLandmarker, lastVideoTime = -1, particles = [], talaCounter = 0, talaInterval = null;
+        let appState = { octave: 4, isTanpuraPlaying: false, currentRaga: null, currentTala: null };
+
+        // Carnatic Music Data
+        // Swarasthanas for frequency calculation
+        const swarasthanas = {"Sa":{ratio:1},"Ri1":{ratio:16/15},"Ri2":{ratio:9/8},"Ri3":{ratio:6/5},"Ga1":{ratio:9/8},"Ga2":{ratio:6/5},"Ga3":{ratio:5/4},"Ma1":{ratio:4/3},"Ma2":{ratio:45/32},"Pa":{ratio:3/2},"Da1":{ratio:8/5},"Da2":{ratio:5/3},"Da3":{ratio:9/5},"Ni1":{ratio:5/3},"Ni2":{ratio:9/5},"Ni3":{ratio:15/8}};
+        
+        // Ragas with their precise swaras (important for absent note logic)
+        const ragas = {
+            mayamalavagowla:{name:"Mayamalavagowla",swaras:["Sa","Ri1","Ga3","Ma1","Pa","Da1","Ni3"]},
+            shankarabharanam:{name:"Shankarabharanam",swaras:["Sa","Ri2","Ga3","Ma1","Pa","Da2","Ni3"]},
+            kalyani:{name:"Kalyani",swaras:["Sa","Ri2","Ga3","Ma2","Pa","Da2","Ni3"]},
+            kharaharapriya:{name:"Kharaharapriya",swaras:["Sa","Ri2","Ga2","Ma1","Pa","Da2","Ni2"]},
+            mohanam:{name:"Mohanam",swaras:["Sa","Ri2","Ga3","Pa","Da2"]},
+            hindolam:{name:"Hindolam",swaras:["Sa","Ga2","Ma1","Da1","Ni2"]}
+        };
+        const allBaseSwaras = ["Sa", "Ri", "Ga", "Ma", "Pa", "Da", "Ni"]; // For UI display of absent notes
+        const allSwarasWithVariants = ["Sa", "Ri1", "Ri2", "Ri3", "Ga1", "Ga2", "Ga3", "Ma1", "Ma2", "Pa", "Da1", "Da2", "Da3", "Ni1", "Ni2", "Ni3"]; // All possible swaras for absent check
+
+        const talas = {adi:{beats:8,pattern:[1,0,1,0,1,1,0,1]},rupaka:{beats:6,pattern:[1,0,1,1,0,1]},triputa:{beats:7,pattern:[1,0,0,1,0,1,0]},dhruva:{beats:14,pattern:[1,0,0,0,1,0,1,0,1,0,0,1,0,1]}};
+        
+        // Audio Engine Setup
+        const basePitch = 261.63; // C4
+        const reverb = new Tone.Reverb({ decay: 1.5, wet: 0.4 }).toDestination();
+        const vibrato = new Tone.Vibrato({ frequency: 5, depth: 0.1, type: 'sine' });
+        const synth = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine', partials: [1, 0.2, 0.01] }, envelope: { attack: 0.01, decay: 0.4, sustain: 0.2, release: 0.4 }, volume: -8 }).chain(vibrato, reverb);
+        
+        // Tanpura Audio Setup (Fixed volume issue)
+        const tanpuraSynth = new Tone.PolySynth(Tone.FMSynth, {
+            harmonicity: 3, modulationIndex: 10,
+            envelope: { attack: 1, decay: 0.1, sustain: 1, release: 1 },
+            volume: -20 // Initial volume, will be updated by slider
+        }).chain(reverb);
+        
+        // Monotonic Triggering System
+        const noteCooldowns = new Map(); // Cooldown for general note triggering
+        const TRIGGER_DISTANCE_THRESHOLD = 0.04; // Decreased sensitivity for more deliberate presses
+        const COOLDOWN_DURATION = 1000; // 1 second cooldown for each note
+
+        // State for each finger (thumb to tip pinch detection)
+        const fingerStates = {
+            left: {
+                8: { pressed: false, assignedSwara: "Sa" },   // Index
+                12: { pressed: false, assignedSwara: "Ri2" }, // Middle
+                16: { pressed: false, assignedSwara: "Ga3" }, // Ring
+                20: { pressed: false, assignedSwara: null }  // Pinky (no longer for notes)
+            },
+            right: {
+                8: { pressed: false, assignedSwara: "Ma1" },   // Index
+                12: { pressed: false, assignedSwara: "Pa" }, // Middle
+                16: { pressed: false, assignedSwara: "Da1" }, // Ring
+                20: { pressed: false, assignedSwara: "Ni1" }  // Pinky
+            }
+        };
+        const FINGER_TIP_LANDMARK_IDS = [8, 12, 16, 20]; // MediaPipe landmark IDs for finger tips
+
+        // --- Core Application Functions ---
+
+        // MediaPipe Hand Landmarker Initialization
+        const createHandLandmarker = async () => {
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+            handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" },
+                runningMode: "VIDEO",
+                numHands: 2
+            });
+        };
+
+        // Webcam Activation
+        const enableCam = async () => {
+            permissionPrompt.classList.add("hidden");
+            loadingIndicator.classList.remove("hidden");
+            await Tone.start(); // Start Tone.js audio context
+            if (!handLandmarker) await createHandLandmarker();
+            loadingIndicator.classList.add("hidden");
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+                video.srcObject = stream;
+            } catch (err) { console.error(err); }
+        };
+        
+        // Start Experience after webcam loads
+        function startExperience() {
+            // FIX: Ensure canvas sizes match video for clarity [1]
+            canvasElement.width = video.videoWidth; canvasElement.height = video.videoHeight;
+            particleCanvas.width = video.videoWidth; particleCanvas.height = video.videoHeight;
+            // No need for canvasElement.style.width/height if Tailwind handles aspect-video
+
+            uiContainer.style.opacity = '0';
+            setTimeout(() => uiContainer.classList.add("hidden"), 700);
+            startTala();
+            predictWebcam();
+        }
+
+        // Main Prediction Loop
+        function predictWebcam() {
+            if (video.readyState < 2) { requestAnimationFrame(predictWebcam); return; } // Wait for video to be ready
+            const results = handLandmarker.detectForVideo(video, performance.now());
+            processHandGestures(results);
+            renderVisuals(results.landmarks);
+            requestAnimationFrame(predictWebcam); // Loop
+        }
+
+        // --- Hand Gesture Processing ---
+
+        function processHandGestures(results) {
+            let leftHandLandmarks = null, rightHandLandmarks = null;
+            if (results.handedness?.length > 0) {
+                // It's possible for only one hand to be detected, or hands can swap handedness quickly.
+                // We need to reliably assign landmarks to left/right.
+                for (let i = 0; i < results.handedness.length; i++) {
+                    const handednessCategory = results.handedness[i][0].categoryName;
+                    if (handednessCategory === "Left") {
+                        leftHandLandmarks = results.landmarks[i];
+                    } else if (handednessCategory === "Right") {
+                        rightHandLandmarks = results.landmarks[i];
+                    }
+                }
+            }
+
+            processHand(leftHandLandmarks, 'left');
+            processHand(rightHandLandmarks, 'right');
+        }
+
+        function processHand(landmarks, handType) {
+            if (!landmarks) {
+                // If hand not detected, ensure all fingers for that hand are marked as not pressed
+                Object.values(fingerStates[handType]).forEach(state => {
+                    state.pressed = false;
+                });
+                return;
+            }
+
+            const thumbTip = landmarks[4]; // Thumb tip landmark
+            
+            FINGER_TIP_LANDMARK_IDS.forEach(fingerId => {
+                const fingerTip = landmarks[fingerId];
+                const isTouchingThumb = Math.hypot(fingerTip.x - thumbTip.x, fingerTip.y - thumbTip.y) < TRIGGER_DISTANCE_THRESHOLD;
+
+                let assignedSwara = fingerStates[handType][fingerId].assignedSwara;
+                
+                // Get Raga-specific variant for Ri, Ga, Ma, Da, Ni
+                if (assignedSwara) { // Check if a swara is actually assigned to this finger for this hand
+                   assignedSwara = getRagaSpecificSwara(assignedSwara);
+                }
+
+                // Monotonic triggering logic [2]
+                if (isTouchingThumb && !fingerStates[handType][fingerId].pressed) {
+                    fingerStates[handType][fingerId].pressed = true;
+                    
+                    if (assignedSwara && appState.currentRaga.swaras.includes(assignedSwara)) { // Check if swara is assigned AND present in Raga
+                        triggerMomentaryNote(assignedSwara, fingerTip);
+                    } else {
+                        // Finger pressed, but swara is not in raga or not assigned,
+                        // mark as pressed but don't play note. This prevents accidental playback
+                    }
+                } else if (!isTouchingThumb && fingerStates[handType][fingerId].pressed) {
+                    // Finger released
+                    fingerStates[handType][fingerId].pressed = false;
+                }
+            });
+        }
+
+        // Logic to get Raga-specific swara variant (e.g., Ri1, Ri2, Ri3)
+        function getRagaSpecificSwara(baseSwara) {
+             const ragaSwaras = appState.currentRaga.swaras;
+             // Check for specific variants first (e.g., Ri1, Ri2, Ri3)
+             const variantChecks = {
+                 "Ri": ["Ri1", "Ri2", "Ri3"],
+                 "Ga": ["Ga1", "Ga2", "Ga3"],
+                 "Ma": ["Ma1", "Ma2"],
+                 "Da": ["Da1", "Da2", "Da3"],
+                 "Ni": ["Ni1", "Ni2", "Ni3"]
+             };
+
+             if (variantChecks[baseSwara.slice(0, 2)]) { // Check if it's a swara with variants
+                 for (const variant of variantChecks[baseSwara.slice(0, 2)]) {
+                     if (ragaSwaras.includes(variant)) {
+                         return variant; // Return the first matching variant found in the raga
+                     }
+                 }
+             }
+             return baseSwara; // For Sa, Pa, or if no variants apply/found in raga (should be handled by appState.currentRaga.swaras.includes check)
+        }
+        
+        // --- Audio Triggering ---
+        function triggerMomentaryNote(swara, fingerTip) {
+            const now = Date.now();
+            if (noteCooldowns.has(swara) && now - noteCooldowns.get(swara) < COOLDOWN_DURATION) return; // Cooldown check
+            
+            const frequency = basePitch * swarasthanas[swara].ratio * Math.pow(2, appState.octave - 4);
+            synth.triggerAttackRelease(frequency, "8n", Tone.now()); // Play note
+
+            currentSwara.textContent = swara; // Update UI
+            createParticles(fingerTip); // Visual feedback
+            highlightSwara(swara); // UI highlight
+            noteCooldowns.set(swara, now); // Set cooldown
+        }
+
+        // --- UI & Visuals ---
+
+        // Render hand landmarks on canvas
+        function renderVisuals(landmarks) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+            if (landmarks) { 
+                const drawingUtils = new DrawingUtils(canvasCtx); 
+                for (const l of landmarks) { 
+                    drawingUtils.drawConnectors(l, HandLandmarker.HAND_CONNECTIONS, { color: "rgba(255, 215, 0, 0.4)", lineWidth: 2 }); 
+                    drawingUtils.drawLandmarks(l, { color: "rgba(255, 215, 0, 0.8)", radius: 4 }); 
+                } 
+            }
+            updateAndDrawParticles();
+            canvasCtx.restore();
+        }
+        
+        // Particle System
+        function createParticles(fingerTip) {
+            const x = fingerTip.x * particleCanvas.width, y = fingerTip.y * particleCanvas.height;
+            for (let i=0; i<10; i++) {
+                particles.push({ x, y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, size: Math.random()*8+2, color: `hsl(${Math.random()*60}, 100%, 75%)`, opacity: 1 });
+            }
+        }
+        function updateAndDrawParticles() {
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            particles.forEach((p, index) => {
+                p.x += p.vx; p.y += p.vy; p.opacity -= 0.03; p.size *= 0.97;
+                if (p.opacity <= 0) particles.splice(index, 1);
+                else { particleCtx.beginPath(); particleCtx.fillStyle = `${p.color.slice(0, -1)}, ${p.opacity})`; particleCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2); particleCtx.fill(); }
+            });
+        }
+
+        // Swara Highlight on UI
+        function highlightSwara(swara) {
+            const el = document.querySelector(`[data-swara="${swara.replace(/\d/g, '')}"]`);
+            if (el) { el.classList.add('swara-glow'); setTimeout(() => el.classList.remove('swara-glow'), 200); }
+        }
+
+        // --- Control Panel Functions ---
+
+        // Tanpura Control (Fixed volume and robust stop)
+        function toggleTanpura() {
+            if (!appState.isTanpuraPlaying) {
+                // Play Sa and Pa in Mandra Sthayi (lower octave)
+                const saFreq = basePitch * swarasthanas.Sa.ratio * Math.pow(2, 3 - 4);
+                const paFreq = basePitch * swarasthanas.Pa.ratio * Math.pow(2, 3 - 4);
+                
+                tanpuraSynth.triggerAttack(saFreq, Tone.now());
+                tanpuraSynth.triggerAttack(paFreq, Tone.now() + 0.1); // Slightly delayed Pa
+                
+                document.getElementById('tanpura-btn-text').textContent = languages[currentLanguage].tanpuraBtnStop;
+                tanpuraToggle.classList.replace("bg-amber-600", "bg-red-600");
+                appState.isTanpuraPlaying = true;
+            } else {
+                tanpuraSynth.releaseAll(); // FIX: Use releaseAll() for robust stop
+                document.getElementById('tanpura-btn-text').textContent = languages[currentLanguage].tanpuraBtnStart;
+                tanpuraToggle.classList.replace("bg-red-600", "bg-amber-600");
+                appState.isTanpuraPlaying = false;
+            }
+        }
+        
+        // Tala Visualization
+        function startTala() { if (talaInterval) clearInterval(talaInterval); talaInterval = setInterval(() => { const beat = talaCounter % appState.currentTala.beats; updateTalaDisplay(beat, appState.currentTala.pattern[beat]); talaCounter++; }, 500); }
+        function updateTalaDisplay(currentBeat, isStrong) { document.getElementById("talaDisplay").innerHTML = Array.from({length: appState.currentTala.beats}, (_, i) => `<div class="w-2 h-2 sm:w-3 sm:h-3 rounded-full ${i === currentBeat ? (isStrong ? 'bg-amber-400 tala-beat' : 'bg-orange-400 tala-beat') : (appState.currentTala.pattern[i] ? 'bg-amber-600' : 'bg-gray-600')}"></div>`).join(''); }
+
+        // --- Raga and Swara Presence UI ---
+        function updateRagaInfo() {
+            appState.currentRaga = ragas[ragaSelect.value];
+            document.getElementById("currentRagaDisplay").textContent = appState.currentRaga.name;
+            updateSwaraPresenceUI(appState.currentRaga.swaras);
+        }
+
+        // Swara Presence UI: Greys out notes not in the current Raga
+        function updateSwaraPresenceUI(currentRagaSwaras) {
+            allBaseSwaras.forEach(baseSwara => { // Iterate through Sa, Ri, Ga, etc.
+                const element = document.querySelector(`.swara-note[data-swara='${baseSwara}']`);
+                if (element) {
+                    let isPresentInRaga = false;
+                    // Check if any variant of this base swara exists in the current raga
+                    // This handles Ri/Ga/Ma/Da/Ni variants and ensures Sa/Pa are checked correctly
+                    const relevantSwaras = allSwarasWithVariants.filter(s => s.startsWith(baseSwara));
+                    for (const variant of relevantSwaras) {
+                        if (currentRagaSwaras.includes(variant)) {
+                            isPresentInRaga = true;
+                            break;
+                        }
+                    }
+
+                    if (isPresentInRaga) {
+                        element.classList.remove('absent');
+                    } else {
+                        element.classList.add('absent');
+                    }
+                }
+            });
+        }
+        
+        // --- Octave Button Control ---
+        function setOctave(octaveValue) {
+            appState.octave = octaveValue;
+            currentOctave.textContent = appState.octave;
+            updateOctaveButtonsUI();
+        }
+
+        function updateOctaveButtonsUI() {
+            document.querySelectorAll('.octave-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (parseInt(btn.dataset.octave) === appState.octave) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+
+        // --- Initialization ---
+        function initializeApp() {
+            updateRagaInfo(); // Initialize Raga and its UI presence
+            updateTala(); // Initialize Tala
+            setOctave(4); // Set default octave to Madhya
+            updateLanguage('en'); // Set default language
+            
+            webcamButton.addEventListener("click", enableCam);
+            video.addEventListener("loadedmetadata", startExperience); // Ensure video is ready before starting
+            tanpuraToggle.addEventListener("click", toggleTanpura);
+            ragaSelect.addEventListener("change", updateRagaInfo);
+            talaSelect.addEventListener("change", updateTala);
+            // Tanpura Volume Slider: Range is now -60dB to 0dB, matches Tone.js expectations
+            // FIX: Set volume directly on tanpuraSynth.volume for persistent effect
+            tanpuraVolume.addEventListener("input", (e) => tanpuraSynth.volume.value = parseFloat(e.target.value)); 
+
+            // Octave Buttons Event Listeners
+            octaveBtnMandra.addEventListener("click", () => setOctave(3));
+            octaveBtnMadhya.addEventListener("click", () => setOctave(4));
+            octaveBtnTara.addEventListener("click", () => setOctave(5));
+
+            languageButtons.forEach(btn => btn.addEventListener('click', () => updateLanguage(btn.dataset.lang)));
+        }
+        function updateTala() { appState.currentTala = talas[talaSelect.value]; startTala(); }
+
+        initializeApp();
+    </script>
+</body>
+</html>
